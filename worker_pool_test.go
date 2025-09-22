@@ -55,12 +55,11 @@ func TestReuseWorkers(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	close(release)
-=
+
 	if countReady(wp) > 1 {
 		t.Fatal("Worker not reused")
 	}
 }
-
 
 func TestSubmitWait(t *testing.T) {
 	defer goleak.VerifyNone(t)
@@ -102,22 +101,16 @@ func TestOverflow(t *testing.T) {
 	defer wp.Stop()
 	releaseChan := make(chan struct{})
 
-	// Start workers, and have them all wait on a channel before completing.
 	for i := 0; i < 64; i++ {
 		wp.Submit(func() { <-releaseChan })
 	}
 
-	// Start a goroutine to free the workers after calling stop.  This way
-	// the dispatcher can exit, then when this goroutine runs, the workerpool
-	// can exit.
 	go func() {
 		<-time.After(time.Millisecond)
 		close(releaseChan)
 	}()
 	wp.Stop()
 
-	// Now that the worker pool has exited, it is safe to inspect its waiting
-	// queue without causing a race.
 	qlen := wp.waitingQueue.Len()
 	if qlen != 62 {
 		t.Fatal("Expected 62 tasks in waiting queue, have", qlen)
@@ -135,7 +128,6 @@ func TestStopRace(t *testing.T) {
 	var started sync.WaitGroup
 	started.Add(max)
 
-	// Start workers, and have them all wait on a channel before completing.
 	for i := 0; i < max; i++ {
 		wp.Submit(func() {
 			started.Done()
@@ -173,8 +165,6 @@ func TestStopRace(t *testing.T) {
 	}
 }
 
-
-
 func TestWorkerLeak(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
@@ -182,15 +172,12 @@ func TestWorkerLeak(t *testing.T) {
 
 	wp := NewWorkerPool(workerCount)
 
-	// Start workers, and have them all wait on a channel before completing.
 	for i := 0; i < workerCount; i++ {
 		wp.Submit(func() {
 			time.Sleep(time.Millisecond)
 		})
 	}
 
-	// If wp..Stop() is not waiting for all workers to complete, then goleak
-	// should catch that
 	wp.Stop()
 }
 
@@ -228,7 +215,6 @@ func BenchmarkEnqueue(b *testing.B) {
 
 	b.ResetTimer()
 
-	// Start workers, and have them all wait on a channel before completing.
 	for i := 0; i < b.N; i++ {
 		wp.Submit(func() { <-releaseChan })
 	}
@@ -241,7 +227,6 @@ func BenchmarkEnqueue2(b *testing.B) {
 
 	b.ResetTimer()
 
-	// Start workers, and have them all wait on a channel before completing.
 	for i := 0; i < b.N; i++ {
 		releaseChan := make(chan struct{})
 		for i := 0; i < 64; i++ {
@@ -283,14 +268,24 @@ func benchmarkExecWorkers(n int, b *testing.B) {
 
 	b.ResetTimer()
 
-	// Start workers, and have them all wait on a channel before completing.
 	for i := 0; i < b.N; i++ {
 		for j := 0; j < n; j++ {
 			wp.Submit(func() {
-				//time.Sleep(100 * time.Microsecond)
 				allDone.Done()
 			})
 		}
 	}
 	allDone.Wait()
+}
+
+func TestSubmitAfterStop_Panics(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	wp := NewWorkerPool(1)
+	wp.Stop()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected panic on Submit after Stop")
+		}
+	}()
+	wp.Submit(func() {})
 }

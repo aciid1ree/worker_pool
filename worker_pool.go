@@ -164,7 +164,6 @@ func (wp *WorkerPool) runQueuedTasks() {
 func (wp *WorkerPool) killIdleWorker() bool {
 	select {
 	case wp.workerQueue <- nil:
-		// Sent kill signal to worker.
 		return true
 	default:
 		return false
